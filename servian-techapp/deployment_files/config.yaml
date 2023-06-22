@@ -1,0 +1,16 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: techapp-cnfg
+  namespace: dev
+data:
+    - name: VTT_DBNAME
+      value: "techapp_dev"
+    - name: VTT_DBPORT
+      value: "5432"
+    - name: VTT_DBHOST
+      value: "techapp-dev.cwrs5qfyyx0m.us-east-2.rds.amazonaws.com"
+    - name: VTT_LISTENHOST
+      value: "0.0.0.0"
+    - name: VTT_LISTENPORT
+      value: "3000"

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: techapp
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: techapp
+  template:
+    metadata:
+      labels:
+        app: techapp
+    spec:
+      containers:
+      - name: techapp
+        image: servian/techchallengeapp:latest
+        readinessProbe:
+          httpGet:
+            path: /healthcheck
+            port: 3000
+          periodSeconds: 1
+          timeoutSeconds: 1
+          successThreshold: 1
+          failureThreshold: 10
+        env:
+          - name: VTT_DBUSER
+            value: "postgres"
+          - name: VTT_DBPASSWORD
+            value: "rHYcUZC1N5k"
+          - name: VTT_DBNAME
+            value: "techapp_dev"
+          - name: VTT_DBPORT
+            value: "5432"
+          - name: VTT_DBHOST
+            value: "techapp-dev.cwrs5qfyyx0m.us-east-2.rds.amazonaws.com"
+          - name: VTT_LISTENHOST
+            value: "0.0.0.0"
+          - name: VTT_LISTENPORT
+            value: "3000"
+        args: ["serve","updatedb -s"]
+        ports:
+        - containerPort: 3000
+      #   envFrom:
+      #     - configMapRef:
+      #         name: techapp-cnfg
+      #     - secretKeyRef:
+      #          name: database-creds 
+      # ServiceAccountName: techapp-service-account

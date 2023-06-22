@@ -1,0 +1,80 @@
+properties(
+    [
+        buildDiscarder(
+            logRotator(
+                daysToKeepStr: '2',
+                numToKeepStr: '5'
+            )
+        )
+    ]
+)
+podTemplate(containers: [
+  containerTemplate(name: 'docker', image: 'docker', command: 'cat', ttyEnabled: true, resourceRequestMemory: '250Mi', resourceLimitMemory: '1.5Gi', resourceRequestCpu: '500m', resourceLimitCpu: '1'),
+  containerTemplate(name: 'aws-kubectl-cli', image: 'bearengineer/awscli-kubectl:latest', command: 'cat', ttyEnabled: true)
+], 
+
+volumes: [
+hostPathVolume(mountPath: '/var/run/docker.sock', hostPath: '/var/run/docker.sock')
+])
+{
+    node(POD_LABEL) {
+		stage('Git Checkout') {
+				git credentialsId: 'c744d5aa-d33f-48af-89a2-241571118623', url: 'https://github.com/servian/TechChallengeApp.git', branch: 'main'
+			}
+
+        stage('Static Code Analysis') {
+		    def SCANNER_HOME = tool 'SonarQube-Scanner';
+		   
+		withSonarQubeEnv(credentialsId: 'sonarqube', installationName: 'sonarqube')
+				 {
+				 sh """
+                    ${SCANNER_HOME}/bin/sonar-scanner 
+					"""
+            }
+        }
+		
+		  container('docker') {
+    		stage('Docker build') {
+                sh 'docker build --network=host -t "techapp":latest .'
+            }  
+        }
+
+        def AWS_ACCOUNT_ID = '<changeme>'
+        def AWS_ACCOUNT_REGION = 'us-east-2'
+
+		  container('docker') {
+             stage('Push to ECR') {
+			    withDockerRegistry(credentialsId: 'ecr:${AWS_ACCOUNT_REGION}:84f2e3e5-b332-45c7-895a-065e99841a80', url: 'https://${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_ACCOUNT_REGION}.amazonaws.com/techapp')
+                {
+                  sh 'docker tag  techapp:${BUILD_NUMBER} ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_ACCOUNT_REGION}.amazonaws.com/techapp:dev.${BUILD_NUMBER}'
+                  sh 'docker push  ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_ACCOUNT_REGION}.amazonaws.com/techapp:dev.${BUILD_NUMBER}'
+                }
+            }
+        }
+        
+        def KUSTOMIZE_HOME = tool name: 'jenkins-kustomize', type: 'com.cloudbees.jenkins.plugins.customtools.CustomTool'
+        stage('Deploy to Argocd') {
+        sh """
+        git config --global user.name 'username'
+        git config --global user.email 'mailid'
+        """
+
+        git branch: "master", url: "", credentialsId: ""
+		
+            sh """
+            ls -ltr
+            pwd
+            cd dev/deployment
+            ${KUSTOMIZE_HOME}/kustomize edit set image "${AWS_ACCOUNT_ID}".dkr.ecr."${AWS_ACCOUNT_REGION}".amazonaws.com/techapp:dev.${BUILD_NUMBER}"
+            git add .
+            git commit -am dev."${BUILD_NUMBER}"
+            git push origin master
+        """
+        }
+
+        
+			
+		    
+        }
+    }
+
